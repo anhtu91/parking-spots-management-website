@@ -1,7 +1,122 @@
 {% extends "base.html" %}
 
 {% block content %}
+<html lang="en">
+
+<head>
+<meta charset="utf-8">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script>
+$(function(){
+    var select_keyid = $('#keyid_list');
+    
+    select_keyid.on('change', function(){
+        var selected_keyid = select_keyid.val();
+        
+        $.ajax({
+            type: 'POST',
+            url: '/fieldname',
+            data: JSON.stringify(selected_keyid),
+            contentType: 'application/json',
+            success: function(response_data) {
+                $("#fieldname_list").empty();
+                for (var i = 0; i < response_data.length; i++) {
+                    $("#fieldname_list").append('<option value="' +response_data[i]+ '">' + response_data[i] + '</option>');
+                }
+            }
+        });
+    });
+});
+</script>
+</head>
+
+<style>
+    .form-wrapper {
+        width: 70%;
+        margin: 0 auto;
+        text-align: center;
+    }
+    .form {
+      background-color: rgb(255, 148, 9);
+      color: rgb(7, 1, 1);
+      border: 2px solid black;
+      margin: 20px;
+      padding: 20px;
+    }
+</style>
+
 <h1 class="title">
-    Welcome, {{name}}!
+    Welcome, {{name}}! <br><br>
 </h1>
+<div id="form-wrapper">
+    <form style="width: 500px; float: left;">
+        <div class="form">
+            <div class="control">
+                <label for="form_label"><p style="font-size:130%;"><b>Invite friend to your parking spots.</b></p></label><br>
+            </div>
+            
+            <div class="control">
+                <label for="keyid">KeyID of parking spots:</label><br>
+                <select name ="keyidList" id="keyid_list" style="width: 400px">
+                    <option value="" selected disabled hidden>Choose here</option>
+                    {% for keyid in keyIDs %}
+                        <option value ="{{keyid}}">{{keyid}}</option>
+                    {% endfor %}
+                </select><br><br>
+            </div>
+            
+            <div class="control">
+                <label for="fieldname">FieldName of parking spots:</label><br>
+                <select name ="fieldnameList" id="fieldname_list" style="width: 400px">
+                    
+                </select><br><br>
+            </div>
+    
+            <div class="control">
+                <label for="Date">Date/time:</label><br>
+                <input type="date" id="invited_day" name="Invited day" style="width: 130px" required>
+                <input type="time" id="invited_time" name="Invited time" style="width: 120px" required><br><br>
+            </div>
+    
+            <div class="control">
+                <label for="email">Invited email:</label><br>
+                <input type="email" id="email" name="email" style="width: 400px" required><br><br>
+            </div>
+    
+            <div>
+                {% with messages = get_flashed_messages(category_filter=["danger"]) %}
+                    {% if messages %}
+                        <div class="notification is-danger">
+                            {{ messages[0] }}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+            
+                {% with messages = get_flashed_messages(category_filter=["success"]) %}
+                    {% if messages %}
+                        <div class="notification is-success">
+                            {{ messages[0] }}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+            </div>
+    
+            <div class="control">
+                <input type="submit" value="Invite">
+            </div>
+        </div>
+    </form>
+    
+    <form style="width: 820px; float: right;">
+        <div class="form">
+            <div class="control">
+                <label for="form_label"><p style="font-size:130%;"><b>Your parking spots.</b></p></label><br>
+            </div>
+            
+        </div>
+    </form>
+
+</div>
+
+</html>
 {% endblock %}
