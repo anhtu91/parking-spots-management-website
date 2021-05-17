@@ -29,7 +29,7 @@ get_field_name_base_link = http_link_tile38+'SCAN '
 
 subject = "Registration confirm - Parking spots management system"
 smtp_server = "smtp.gmail.com"
-sender_email = "tuoithantienchukodien@gmail.com"
+sender_email = "xxxx@gmail.com"
 password = "xxxxxx"
 
 #######################################################################################
