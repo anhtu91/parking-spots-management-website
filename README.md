@@ -1,4 +1,4 @@
-# Create_LoginPage
+# Parking spots management system
 This project will give you an exemple of login page using Flask. 
 
 1. First Step 
