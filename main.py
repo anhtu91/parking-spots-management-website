@@ -1,7 +1,7 @@
 ########################################################################################
 ######################          Import packages      ###################################
 ########################################################################################
-from flask import Blueprint, render_template, session, flash
+from flask import Blueprint, render_template, session
 from flask import Flask
 import os
 from auth import get_key_id_from_geofence_server

@@ -1,7 +1,7 @@
 ########################################################################################
 ######################          Import packages      ###################################
 ########################################################################################
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, jsonify
 from hashlib import sha256 #Covert to SHA256
 from pymongo import MongoClient # Database connector
 import os
@@ -29,8 +29,8 @@ get_field_name_base_link = http_link_tile38+'SCAN '
 
 subject = "Registration confirm - Parking spots management system"
 smtp_server = "smtp.gmail.com"
-sender_email = "xxxx@gmail.com"
-password = "xxxxxx"
+sender_email = "tuoithantienchukodien@gmail.com"
+password = "01672280954"
 
 #######################################################################################
 # MQTT folder
@@ -114,7 +114,14 @@ def logout(): #define the logout function
 def get_fieldname_list():
     selected_keyid = request.get_json(force=True)
     fieldname = get_field_name_from_keyid(selected_keyid)
-    return tuple(fieldname)
+    return jsonify(fieldname)
+
+def invite_button():
+    if request.method == 'POST':
+        print("POST")
+    elif request.method == 'GET':
+        if request.form.get("invite"):
+            pass
 
 def get_data_from_geofence_server(http_link):
     r = requests.get(http_link)

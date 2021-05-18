@@ -20,8 +20,10 @@ $(function(){
             contentType: 'application/json',
             success: function(response_data) {
                 $("#fieldname_list").empty();
+            
+                console.log(response_data)
                 for (var i = 0; i < response_data.length; i++) {
-                    $("#fieldname_list").append('<option value="' +response_data[i]+ '">' + response_data[i] + '</option>');
+                    $("#fieldname_list").append($('<option value="' +response_data[i]+ '">' + response_data[i] + '</option>'));
                 }
             }
         });
@@ -57,7 +59,7 @@ $(function(){
             
             <div class="control">
                 <label for="keyid">KeyID of parking spots:</label><br>
-                <select name ="keyidList" id="keyid_list" style="width: 400px">
+                <select name ="keyidList" id="keyid_list" style="width: 400px" required>
                     <option value="" selected disabled hidden>Choose here</option>
                     {% for keyid in keyIDs %}
                         <option value ="{{keyid}}">{{keyid}}</option>
@@ -67,7 +69,7 @@ $(function(){
             
             <div class="control">
                 <label for="fieldname">FieldName of parking spots:</label><br>
-                <select name ="fieldnameList" id="fieldname_list" style="width: 400px">
+                <select name ="fieldnameList" id="fieldname_list" style="width: 400px" required>
                     
                 </select><br><br>
             </div>
@@ -102,7 +104,7 @@ $(function(){
             </div>
     
             <div class="control">
-                <input type="submit" value="Invite">
+                <input type="submit" name="invite" value="Invite">
             </div>
         </div>
     </form>
