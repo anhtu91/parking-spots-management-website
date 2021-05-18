@@ -1,10 +1,11 @@
 ########################################################################################
 ######################          Import packages      ###################################
 ########################################################################################
-from flask import Blueprint, render_template, session
+from flask import Blueprint, render_template, session, request
 from flask import Flask
 import os
-from auth import get_key_id_from_geofence_server
+
+from auth import get_key_id_from_geofence_server, config
 
 ########################################################################################
 # our main blueprint
@@ -22,10 +23,9 @@ def profile():
     else:
         return render_template('index.html')
 
-
 if __name__ == '__main__':
     app = Flask(__name__) # creates the Flask instance, __name__ is the name of the current Python module
-    app.config['SECRET_KEY'] = 'Anh.Tu.Nguyen-anhtu91@gmail.com-FH-Dortmund-2021' # it is used by Flask and extensions to keep data safe
+    app.config['SECRET_KEY'] = config.get('SecretKey', 'key') # it is used by Flask and extensions to keep data safe
     
     from auth import auth as auth_blueprint
     # blueprint for auth parts of app

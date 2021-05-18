@@ -51,7 +51,7 @@ $(function(){
     Welcome, {{name}}! <br><br>
 </h1>
 <div id="form-wrapper">
-    <form style="width: 500px; float: left;">
+    <form style="width: 500px; float: left;" action="/invite" method="POST">
         <div class="form">
             <div class="control">
                 <label for="form_label"><p style="font-size:130%;"><b>Invite friend to your parking spots.</b></p></label><br>
@@ -59,7 +59,7 @@ $(function(){
             
             <div class="control">
                 <label for="keyid">KeyID of parking spots:</label><br>
-                <select name ="keyidList" id="keyid_list" style="width: 400px" required>
+                <select name ="keyid_list" id="keyid_list" style="width: 400px" required>
                     <option value="" selected disabled hidden>Choose here</option>
                     {% for keyid in keyIDs %}
                         <option value ="{{keyid}}">{{keyid}}</option>
@@ -69,22 +69,22 @@ $(function(){
             
             <div class="control">
                 <label for="fieldname">FieldName of parking spots:</label><br>
-                <select name ="fieldnameList" id="fieldname_list" style="width: 400px" required>
+                <select name ="fieldname_list" id="fieldname_list" style="width: 400px" required>
                     
                 </select><br><br>
             </div>
     
             <div class="control">
                 <label for="Date">Date/time:</label><br>
-                <input type="date" id="invited_day" name="Invited day" style="width: 130px" required>
-                <input type="time" id="invited_time" name="Invited time" style="width: 120px" required><br><br>
+                <input type="date" id="invited_day" name="invited_day" style="width: 130px" required>
+                <input type="time" id="invited_time" name="invited_time" style="width: 120px" required><br><br>
             </div>
     
             <div class="control">
                 <label for="email">Invited email:</label><br>
                 <input type="email" id="email" name="email" style="width: 400px" required><br><br>
             </div>
-    
+            
             <div>
                 {% with messages = get_flashed_messages(category_filter=["danger"]) %}
                     {% if messages %}
@@ -102,7 +102,9 @@ $(function(){
                     {% endif %}
                 {% endwith %}
             </div>
-    
+            
+            <br>
+
             <div class="control">
                 <input type="submit" name="invite" value="Invite">
             </div>

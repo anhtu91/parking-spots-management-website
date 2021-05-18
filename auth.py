@@ -6,7 +6,6 @@ from hashlib import sha256 #Covert to SHA256
 from pymongo import MongoClient # Database connector
 import os
 import requests
-#from requests.api import request #HTTP get request
 
 import smtplib #Email connection
 from email import encoders
@@ -14,12 +13,29 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import jwt
+import qrcode
+import PIL
+import configparser
+
+
+#######################################################################################
+# Current folder 
+
+current_folder = os.path.dirname(os.path.abspath(__file__))
+
+#######################################################################################
+# Read config.conf
+
+config = configparser.ConfigParser()
+
+config.read(current_folder+'/config.conf')
 
 #######################################################################################
 # Geofence Tile38 Server configuration
 
-ip_address_tile38 = '172.18.0.4'
-port_tile38 = '9851'
+ip_address_tile38 = config.get('Tile38', 'ip')
+port_tile38 = config.get('Tile38', 'port')
 http_link_tile38 = 'http://'+ip_address_tile38+':'+port_tile38+'/'
 get_all_keys_tile38_link = http_link_tile38+'KEYS *'
 get_field_name_base_link = http_link_tile38+'SCAN '
@@ -27,21 +43,21 @@ get_field_name_base_link = http_link_tile38+'SCAN '
 #######################################################################################
 # Email configuration
 
-subject = "Registration confirm - Parking spots management system"
-smtp_server = "smtp.gmail.com"
-sender_email = "tuoithantienchukodien@gmail.com"
-password = "01672280954"
+smtp_server = config.get('Email', 'smtp_server')
+sender_email = config.get('Email', 'email')
+password = config.get('Email', 'password')
 
 #######################################################################################
-# MQTT folder
+# Folder
 
-mqtt_client_key_folder = '/mqtt_client_key' #Change if change name of mqtt client key
+mqtt_client_key_folder = config.get('Folder', 'mqtt_client_key') #Change if change name of mqtt client key
+invite_qr_code_folder = config.get('Folder', 'invite_qr_code')
 
 #######################################################################################
 # Setup mongodb connection
 
-ip_address_mongodb = '172.18.0.5' #change to correct IP of mongodb
-port_mongodb = '27017'
+ip_address_mongodb = config.get('Mongodb', 'ip') #change to correct IP of mongodb
+port_mongodb = config.get('Mongodb', 'port') 
 
 mongodb_host = os.environ.get('MONGO_HOST', ip_address_mongodb)
 mongodb_port = int(os.environ.get('MONGO_PORT', port_mongodb))
@@ -49,6 +65,29 @@ client = MongoClient(mongodb_host, mongodb_port)    #Configure the connection to
 db = client.mqtt    #Select the database
 mqtt_user_collection = db.mqtt_user #Select the defined user collection
 mqtt_acl_collection = db.mqtt_acl   #Select access control list of user collection
+
+#######################################################################################
+# QR Code 
+
+qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+
+#######################################################################################
+# JWT
+
+private_key = config.get('JWT', 'private_key') #Get JWT private key
+jwt_algorithm = config.get('JWT', 'algorithm')
+
+#######################################################################################
+# MQTT certificate
+
+require_info = config.get('MQTT_certificate', 'require_info')
+valid_day = config.get('MQTT_certificate', 'valid_day')
+size_of_key_to_generate_in_bits = config.get('MQTT_certificate', 'size_of_key_to_generate_in_bits')
 
 #######################################################################################
 
@@ -100,7 +139,7 @@ def signup(): # define the sign up function
 
         create_mqtt_certificate(_username, _mqttPassword) #Create MQTT Certificate and encryption by password
 
-        send_email_to_user(_username, _email) #Send confirmation email with MQTT Certificate to user
+        send_signup_email(_username, _email) #Send confirmation email with MQTT Certificate to user
 
         flash('An email with MQTT certificate is sent to your email '+_email, 'success')
         return redirect(url_for('auth.signup'))
@@ -112,16 +151,40 @@ def logout(): #define the logout function
 
 @auth.route('/fieldname', methods=['POST'])
 def get_fieldname_list():
-    selected_keyid = request.get_json(force=True)
-    fieldname = get_field_name_from_keyid(selected_keyid)
-    return jsonify(fieldname)
+    if 'username' in session:
+        selected_keyid = request.get_json(force=True)
+        fieldname = get_field_name_from_keyid(selected_keyid)
+        return jsonify(fieldname)
 
-def invite_button():
-    if request.method == 'POST':
-        print("POST")
-    elif request.method == 'GET':
-        if request.form.get("invite"):
-            pass
+@auth.route('/invite', methods=['POST'])
+def invite():
+    if 'username' in session:
+        _keyid = request.form.get('keyid_list')
+        _fieldname = request.form.get('fieldname_list')
+        _date = request.form['invited_day']
+        _time = request.form['invited_time']
+        _email = request.form.get('email')
+
+        invite_json = {
+            "keyid": _keyid,
+            "fieldname": _fieldname,
+            "date": _date,
+            "time": _time,
+            "email": _email
+        }
+
+        encoded = jwt.encode(invite_json, private_key, algorithm=jwt_algorithm)
+
+        qr.add_data(encoded)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        qr_file_path = current_folder+invite_qr_code_folder+"/"+_keyid+'_'+_fieldname+'_'+_date+'_'+_time+".png"
+        iml = img.save(qr_file_path)
+
+        send_invite_email(session['username'], _email, _keyid, _fieldname, _time, _date, qr_file_path)
+        flash('Send successful invitation to your visitor', 'success')
+        return redirect(url_for('main.profile'))
 
 def get_data_from_geofence_server(http_link):
     r = requests.get(http_link)
@@ -152,10 +215,10 @@ def get_field_name_from_keyid(keyid):
 
 def create_mqtt_certificate(_username, _mqttPassword):
     #Create MQTT Certificate and encryption by password
-    os.chdir(os.path.dirname(os.path.abspath(__file__))+mqtt_client_key_folder)
-    os.system('openssl genrsa -out '+_username+'.key 2048')
-    os.system('openssl req -new -key '+_username+'.key -out '+_username+'.csr -subj "/C=DE/ST=NRW/L=Dortmund/O=EMQX/CN=client"')
-    os.system('openssl x509 -req -days 3650 -in '+_username+'.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out '+_username+'.pem')
+    os.chdir(current_folder+mqtt_client_key_folder)
+    os.system('openssl genrsa -out '+_username+'.key '+size_of_key_to_generate_in_bits)
+    os.system('openssl req -new -key '+_username+'.key -out '+_username+'.csr -subj "'+require_info+'"')
+    os.system('openssl x509 -req -days '+valid_day+' -in '+_username+'.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out '+_username+'.pem')
     os.system('openssl pkcs12 -export -in '+_username+'.pem -inkey '+_username+'.key -name "$'+_username+' certificate/key" -out '+_username+'.p12 -password pass:'+_mqttPassword)
 
 def insert_new_user_to_database(_username, _password, _email):
@@ -171,9 +234,19 @@ def insert_new_user_to_database(_username, _password, _email):
 
     mqtt_user_collection.insert(mqtt_user_post)
 
-def send_email_to_user(username, receiver_email):
-    body = "Hi, "+username+"\n\nYou have registered by Parking spots management system. MQTT Certificate for securing MQTT Connection by Owntracks can be found in attachment.\n\n Best regrad,\nFH Dortmund - Parking spots management system"
+def send_signup_email(username, receiver_email):
+    subject = "Registration confirm - Parking spots management system"
+    body = "Dear "+username+",\n\nYou have registered by Parking spots management system. MQTT Certificate for securing MQTT Connection by Owntracks can be found in attachment.\n\nBest regrad,\nFH Dortmund - Parking spots management system"
+    files_path = [current_folder+mqtt_client_key_folder+'/ca.pem', current_folder+mqtt_client_key_folder+'/'+username+'.p12']
+    send_email_to_user(receiver_email, files_path, subject, body)
 
+def send_invite_email(username, receiver_email, keyid, fieldname, time, date, qr_file_path):
+    subject = "Invite to parking spots by "+username
+    body = "Dear visitor,\n\nUser "+username+" has invited you to this following parking spot "+keyid+" - "+fieldname+" at "+time+" "+date+".\n\nBest regrad,\nFH Dortmund - Parking spots management system"
+    files_path = [qr_file_path]
+    send_email_to_user(receiver_email, files_path, subject, body)
+
+def send_email_to_user(receiver_email, files_path, subject, body):
     # Create a multipart message and set headers
     message = MIMEMultipart()
     message["From"] = sender_email
@@ -183,8 +256,6 @@ def send_email_to_user(username, receiver_email):
 
     # Add body to email
     message.attach(MIMEText(body, "plain"))
-
-    files_path = [os.path.dirname(os.path.abspath(__file__))+'/mqtt_client_key/ca.pem', os.path.dirname(os.path.abspath(__file__))+'/mqtt_client_key/'+username+'.p12']
 
     for file_path in files_path:
         with open(file_path, "rb") as attachment:
