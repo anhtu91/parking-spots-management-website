@@ -12,12 +12,11 @@ $(function(){
     var select_keyid_parking_spots = $('#your_select_keyid');    
     var select_fieldname_parking_spots = $('#your_select_fieldname');
 
-    $('#invited_day').datepicker({
-        minDate: 0,
-        maxDate: '+1w-3D',
-        beforeShowDay: $.datepicker.noWeekends
-    });
+    //For limit datepicker range
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementsByName("invited_day")[0].setAttribute('min', today);
 
+    //When user click keyid in invite friends 
     select_keyid_invite.on('change', function(){
         var selected_keyid = select_keyid_invite.val();
         
@@ -37,8 +36,11 @@ $(function(){
         });
     });
 
-    
+    $('#invite').click(function(e){
 
+    });
+
+    //When user click keyid in your selected parking spots
     select_keyid_parking_spots.on('change', function(){
         var selected_keyid = select_keyid_parking_spots.val();
         
@@ -58,6 +60,7 @@ $(function(){
         });
     });
 
+    //When user click add spot in your selected parking spots
     $('#add_spots').click(function(e){
         var selected_keyid = select_keyid_parking_spots.val();
         var selected_fieldname = select_fieldname_parking_spots.val();
@@ -85,6 +88,7 @@ $(function(){
         });
     });
 
+    //When user click remove spot in your selected parking spots
     $('#remove_spots').click(function(e){
         var selected_keyid = select_keyid_parking_spots.val();
         var selected_fieldname = select_fieldname_parking_spots.val();
@@ -241,8 +245,8 @@ $(function(){
         </div>
     </form>
 
-    <form style="width: 500px; height: 500px; float: right;" action="/invite" method="POST">
-        <div class="form" style="height: 448px;">
+    <form style="width: 500px; height: 500px; float: right;">
+        <div class="form" style="height: 428px;">
             <div class="control">
                 <label for="form_label"><p style="font-size:130%;"><b>Invite friend to your parking spots.</b></p></label><br>
             </div>
@@ -275,33 +279,13 @@ $(function(){
                 <input type="email" id="email" name="email" style="width: 400px" required><br><br>
             </div>
             
-            <div>
-                {% with messages = get_flashed_messages(category_filter=["danger"]) %}
-                    {% if messages %}
-                        <div class="notification is-danger">
-                            {{ messages[0] }}
-                        </div>
-                    {% endif %}
-                {% endwith %}
-            
-                {% with messages = get_flashed_messages(category_filter=["success"]) %}
-                    {% if messages %}
-                        <div class="notification is-success">
-                            {{ messages[0] }}
-                        </div>
-                    {% endif %}
-                {% endwith %}
-            </div>
-            
-            <br>
-
             <div class="control">
                 <input type="submit" name="invite" style="width: 100px" value="Invite">
             </div>
         </div>
     </form>
 
-    <form style="width: 500px; height: 200px; float: right;" action="/resendmqttcert" method="POST">
+    <form style="width: 500px; height: 228px; float: right;" action="/resendmqttcert" method="POST">
         <div class="form" style="height: 200px;">
             <div class="control">
                 <label for="form_label"><p style="font-size:130%;"><b>Resend MQTT Certificate to your email.</b></p></label><br>
