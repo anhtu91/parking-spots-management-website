@@ -114,7 +114,6 @@ def login(): # define login page fucntion
         session['username'] = _username
         return redirect(url_for('main.profile'))
 
-
 @auth.route('/signup', methods=['GET', 'POST'])# we define the sign up path
 def signup(): # define the sign up function
     if request.method=='GET': # If the request is GET we return the sign up page and forms
@@ -150,43 +149,99 @@ def logout(): #define the logout function
     return redirect(url_for('main.index'))
 
 @auth.route('/fieldname', methods=['POST'])
-def get_fieldname_list():
+def get_fieldname_list(): #Get fieldname from selected keyid
     if 'username' in session:
         selected_keyid = request.get_json(force=True)
         fieldname = get_field_name_from_keyid(selected_keyid)
         return jsonify(fieldname)
 
 @auth.route('/invite', methods=['POST'])
-def invite():
+def invite(): #Use to invite visitor
     if 'username' in session:
-        _keyid = request.form.get('keyid_list')
-        _fieldname = request.form.get('fieldname_list')
-        _date = request.form['invited_day']
-        _time = request.form['invited_time']
-        _email = request.form.get('email')
+        try:
+            _keyid = request.form.get('keyid_list')
+            _fieldname = request.form.get('fieldname_list')
+            _date = request.form['invited_day']
+            _time = request.form['invited_time']
+            _email = request.form.get('email')
 
-        invite_json = {
-            "keyid": _keyid,
-            "fieldname": _fieldname,
-            "date": _date,
-            "time": _time,
-            "email": _email
-        }
+            invite_json = {
+                "keyid": _keyid,
+                "fieldname": _fieldname,
+                "date": _date,
+                "time": _time,
+                "email": _email
+            }
+            #Create jwt from invite info using private key
+            encoded = jwt.encode(invite_json, private_key, algorithm=jwt_algorithm)
 
-        encoded = jwt.encode(invite_json, private_key, algorithm=jwt_algorithm)
+            #Create qr code
+            qr.add_data(encoded)
+            qr.make(fit=True)
 
-        qr.add_data(encoded)
-        qr.make(fit=True)
-
-        img = qr.make_image(fill_color="black", back_color="white")
-        qr_file_path = current_folder+invite_qr_code_folder+"/"+_keyid+'_'+_fieldname+'_'+_date+'_'+_time+".png"
-        iml = img.save(qr_file_path)
-
-        send_invite_email(session['username'], _email, _keyid, _fieldname, _time, _date, qr_file_path)
-        flash('Send successful invitation to your visitor', 'success')
+            img = qr.make_image(fill_color="black", back_color="white")
+            qr_file_path = current_folder+invite_qr_code_folder+"/"+_email+'_'+_keyid+'_'+_fieldname+'_'+_date+'_'+_time+".png"
+            iml = img.save(qr_file_path)
+            
+            #Send email to visitor
+            send_invite_email(session['username'], _email, _keyid, _fieldname, _time, _date, qr_file_path)
+            flash('Send successful invitation to your visitor', 'success')
+        except Exception as e:
+            flash('Error while sending email to visitor', 'danger')
+            print('Error while sending email to visitor '+str(e))
         return redirect(url_for('main.profile'))
 
-def get_data_from_geofence_server(http_link):
+@auth.route('/addspots', methods=['POST'])
+def add_spots(): #Add select spots to mongodb
+    if 'username' in session:
+        try:
+            json_data = request.json
+            _keyid = json_data['keyid']
+            _fieldname = json_data['fieldname']
+            _username = session['username']
+
+            user_data = mqtt_user_collection.find_one({"username":_username})
+            all_selected_parking_spots = user_data['allSelectedLocations']
+            
+            if check_user_already_select_spot(_keyid, _fieldname, all_selected_parking_spots): #User select spot which already existed his selected parking spots
+                return redirect(url_for('main.profile'))
+
+            new_selected_parking_spot = {"keyID": _keyid, "fieldName": _fieldname, "inside": False}
+            all_selected_parking_spots.append(new_selected_parking_spot)
+
+            selected_locations = {"$set": {"allSelectedLocations":all_selected_parking_spots}}
+            mqtt_user_collection.update_one({"username":_username}, selected_locations)
+        except Exception as e:
+            print('Error while adding spot '+str(e))
+        return jsonify(get_all_selected_parking_spots())
+
+@auth.route('/removespots', methods=['POST'])
+def remove_spots(): #Remove select spots 
+    if 'username' in session:
+        try:
+            pass
+        except Exception as e:
+            print('Error while adding spot '+str(e))
+        return jsonify(get_all_selected_parking_spots())
+
+def get_all_selected_parking_spots(): #Get all selected parking spots of current user
+    username = session['username']
+    user_data = mqtt_user_collection.find_one({"username":username})
+    all_selected_parking_spots = user_data['allSelectedLocations']
+    parking_spots =[]
+
+    for spot in all_selected_parking_spots:
+        parking_spots.append({"keyid": spot['keyID'],"fieldname": spot['fieldName']})
+
+    return parking_spots
+
+def check_user_already_select_spot(_keyid, _fieldname, all_selected_parking_spots): #Check if user already selected parking spot. Return true if already selected and save in mongodb
+    for spot in all_selected_parking_spots:
+        if spot['keyID'] == _keyid and spot['fieldName'] == _fieldname:
+            return True
+    return False
+
+def get_data_from_geofence_server(http_link): #Use to ask tile38
     r = requests.get(http_link)
     if r.status_code != 200:
         flash('No connection with geofence server - Tile38!', 'danger')
@@ -198,12 +253,12 @@ def get_data_from_geofence_server(http_link):
         return
     return return_data
 
-def get_key_id_from_geofence_server():
+def get_key_id_from_geofence_server(): #Get all keyid from tile38
     return_data = get_data_from_geofence_server(get_all_keys_tile38_link)
     keyIDs = return_data['keys']
     return keyIDs
 
-def get_field_name_from_keyid(keyid):
+def get_field_name_from_keyid(keyid): #Get fieldname from keyid 
     return_data = get_data_from_geofence_server(get_field_name_base_link+keyid)
     fieldname = [] #get all field name which belongs to keyid
     objects = return_data['objects']
@@ -213,19 +268,19 @@ def get_field_name_from_keyid(keyid):
 
     return fieldname
 
-def create_mqtt_certificate(_username, _mqttPassword):
-    #Create MQTT Certificate and encryption by password
+def create_mqtt_certificate(_username, _mqttPassword): #Create MQTT Certificate and encryption by password
     os.chdir(current_folder+mqtt_client_key_folder)
     os.system('openssl genrsa -out '+_username+'.key '+size_of_key_to_generate_in_bits)
     os.system('openssl req -new -key '+_username+'.key -out '+_username+'.csr -subj "'+require_info+'"')
     os.system('openssl x509 -req -days '+valid_day+' -in '+_username+'.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out '+_username+'.pem')
     os.system('openssl pkcs12 -export -in '+_username+'.pem -inkey '+_username+'.key -name "$'+_username+' certificate/key" -out '+_username+'.p12 -password pass:'+_mqttPassword)
 
-def insert_new_user_to_database(_username, _password, _email):
+def insert_new_user_to_database(_username, _password, _email): #Insert new user to mongodb
     mqtt_user_post = {
         "username":_username,
         "password": sha256(_password.encode('utf-8')).hexdigest(),
-        "email": _email
+        "email": _email,
+        "allSelectedLocations": []
     }
         
     mqtt_acl_post = {
@@ -234,13 +289,13 @@ def insert_new_user_to_database(_username, _password, _email):
 
     mqtt_user_collection.insert(mqtt_user_post)
 
-def send_signup_email(username, receiver_email):
+def send_signup_email(username, receiver_email): #Send registration email to user
     subject = "Registration confirm - Parking spots management system"
     body = "Dear "+username+",\n\nYou have registered by Parking spots management system. MQTT Certificate for securing MQTT Connection by Owntracks can be found in attachment.\n\nBest regrad,\nFH Dortmund - Parking spots management system"
     files_path = [current_folder+mqtt_client_key_folder+'/ca.pem', current_folder+mqtt_client_key_folder+'/'+username+'.p12']
     send_email_to_user(receiver_email, files_path, subject, body)
 
-def send_invite_email(username, receiver_email, keyid, fieldname, time, date, qr_file_path):
+def send_invite_email(username, receiver_email, keyid, fieldname, time, date, qr_file_path): #Send invitation email to user
     subject = "Invite to parking spots by "+username
     body = "Dear visitor,\n\nUser "+username+" has invited you to this following parking spot "+keyid+" - "+fieldname+" at "+time+" "+date+".\n\nBest regrad,\nFH Dortmund - Parking spots management system"
     files_path = [qr_file_path]

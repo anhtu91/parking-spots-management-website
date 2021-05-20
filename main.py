@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, session, request
 from flask import Flask
 import os
 
-from auth import get_key_id_from_geofence_server, config
+from auth import get_key_id_from_geofence_server, get_all_selected_parking_spots, config
 
 ########################################################################################
 # our main blueprint
@@ -18,8 +18,9 @@ def index():
 @main.route('/profile') # profile page that return 'profile'
 def profile():
     if 'username' in session:
-        keyIDs = get_key_id_from_geofence_server()
-        return render_template('profile.html', name=session['username'], keyIDs=keyIDs)
+        keyids = get_key_id_from_geofence_server()
+        all_selected_parking_spots = get_all_selected_parking_spots()
+        return render_template('profile.html', name=session['username'], keyids=keyids, user_parking_spots=all_selected_parking_spots)
     else:
         return render_template('index.html')
 
