@@ -96,53 +96,59 @@ auth = Blueprint('auth', __name__) # create a Blueprint object that we name 'aut
 
 @auth.route('/login', methods=['GET', 'POST']) # define login page path
 def login(): # define login page fucntion
-    if request.method=='GET': # if the request is a GET we return the login page
-        return render_template('login.html')
-    else: # if the request is POST the we check if the user exist and with te right password
-        _username = request.form.get('username')
-        _password = request.form.get('password')
-        user_query = mqtt_user_collection.find_one({"username":_username})
-                
-        # check if the user actually exists
-        # take the user-supplied password, hash it, and compare it to the hashed password in the database
-        if not user_query:
-            flash('Please sign up before!', 'danger')
-            return redirect(url_for('auth.signup'))
-        elif sha256(_password.encode('utf-8')).hexdigest() != user_query["password"]:
-            flash('Please check your login details and try again.', 'danger')
-            return redirect(url_for('auth.login')) # if the user doesn't exist or password is wrong, reload the page
-        # if the above check passes, then we know the user has the right credentials
-        session['username'] = _username
-        return redirect(url_for('main.profile'))
-
+    try:
+        if request.method=='GET': # if the request is a GET we return the login page
+            return render_template('login.html')
+        else: # if the request is POST the we check if the user exist and with te right password
+            _username = request.form.get('username')
+            _password = request.form.get('password')
+            user_query = mqtt_user_collection.find_one({"username":_username})
+                    
+            # check if the user actually exists
+            # take the user-supplied password, hash it, and compare it to the hashed password in the database
+            if not user_query:
+                flash('Please sign up before!', 'danger')
+                return redirect(url_for('auth.signup'))
+            elif sha256(_password.encode('utf-8')).hexdigest() != user_query["password"]:
+                flash('Please check your login details and try again.', 'danger')
+                return redirect(url_for('auth.login')) # if the user doesn't exist or password is wrong, reload the page
+            # if the above check passes, then we know the user has the right credentials
+            session['username'] = _username
+            return redirect(url_for('main.profile'))
+    except Exception as e:
+        return render_template('index.html', error_message="Connection error. Please contact admin for more information!")
+    
 @auth.route('/signup', methods=['GET', 'POST'])# we define the sign up path
 def signup(): # define the sign up function
-    if request.method=='GET': # If the request is GET we return the sign up page and forms
-        return render_template('signup.html')
-    else: # if the request is POST, then we check if the email doesn't already exist and then we save data
-        _username = request.form.get('username')
-        _password = request.form.get('password')
-        _email = request.form.get('email')
-        _mqttPassword = request.form.get('mqttPassword')
+    try:
+        if request.method=='GET': # If the request is GET we return the sign up page and forms
+            return render_template('signup.html')
+        else: # if the request is POST, then we check if the email doesn't already exist and then we save data
+            _username = request.form.get('username')
+            _password = request.form.get('password')
+            _email = request.form.get('email')
+            _mqttPassword = request.form.get('mqttPassword')
 
-        user_query = mqtt_user_collection.find_one({"username":_username}) # if this returns a user, then the username already exists in database
-        email_query = mqtt_user_collection.find_one({"email":_email})
+            user_query = mqtt_user_collection.find_one({"username":_username}) # if this returns a user, then the username already exists in database
+            email_query = mqtt_user_collection.find_one({"email":_email})
 
-        if user_query: # if a user is found, we want to redirect back to signup page so user can try again
-            flash('Username already exists', 'danger')
+            if user_query: # if a user is found, we want to redirect back to signup page so user can try again
+                flash('Username already exists', 'danger')
+                return redirect(url_for('auth.signup'))
+            if email_query: # if email is found, we want to redirect back to signup page so user can try again
+                flash('Email address already exists', 'danger')
+                return redirect(url_for('auth.signup'))
+
+            insert_new_user_to_database(_username, _password, _email) #Add new user info to database
+
+            create_mqtt_certificate(_username, _mqttPassword) #Create MQTT Certificate and encryption by password
+
+            send_signup_email(_username, _email) #Send confirmation email with MQTT Certificate to user
+
+            flash('An email with MQTT certificate is sent to your email '+_email, 'success')
             return redirect(url_for('auth.signup'))
-        if email_query: # if email is found, we want to redirect back to signup page so user can try again
-            flash('Email address already exists', 'danger')
-            return redirect(url_for('auth.signup'))
-
-        insert_new_user_to_database(_username, _password, _email) #Add new user info to database
-
-        create_mqtt_certificate(_username, _mqttPassword) #Create MQTT Certificate and encryption by password
-
-        send_signup_email(_username, _email) #Send confirmation email with MQTT Certificate to user
-
-        flash('An email with MQTT certificate is sent to your email '+_email, 'success')
-        return redirect(url_for('auth.signup'))
+    except Exception as e:
+        return render_template('index.html', error_message="Connection error. Please contact admin for more information!")
 
 @auth.route('/logout') # define logout path
 def logout(): #define the logout function
@@ -341,7 +347,7 @@ def insert_new_user_to_database(_username, _password, _email): #Insert new user 
 
     mqtt_user_collection.insert(mqtt_user_post)
 
-def resend_mqtt_cert(username, receiver_email):
+def resend_mqtt_cert(username, receiver_email): #Resend mqtt cert
     subject = "Resend MQTT Certificate - Parking spots management system"
     body = "Dear "+username+",\n\nYou have requested for new MQTT Certificate. The MQTT Certificate for securing MQTT Connection by Owntracks can be found in attachment.\n\nBest regrad,\nFH Dortmund - Parking spots management system"
     files_path = [current_folder+mqtt_client_key_folder+'/ca.pem', current_folder+mqtt_client_key_folder+'/'+username+'/'+username+'.p12']

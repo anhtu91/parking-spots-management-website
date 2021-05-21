@@ -54,6 +54,7 @@ $(function(){
             contentType: 'application/json',
             success: function(response_data) {
                 alert(response_data['result']);
+                window.location = '/profile';
             },
             error: function (request, status, error) {
                 alert("Error "+request.responseText);
@@ -160,9 +161,11 @@ $(function(){
             contentType: 'application/json',
             success: function(response_data) {
                 alert(response_data['result']);
+                window.location = '/profile';
             },
             error: function (request, status, error) {
                 alert("Error "+request.responseText);
+                window.location = '/profile';
             }
         });
     });
