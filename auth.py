@@ -51,9 +51,20 @@ password = config.get('Email', 'password')
 #######################################################################################
 # Folder
 
-mqtt_client_key_folder = config.get('Folder', 'mqtt_client_key') #Change if change name of mqtt client key
-invite_qr_code_folder = config.get('Folder', 'invite_qr_code')
+mqtt_client_key_folder = config.get('Folder', 'mqtt_client_key') 
+invite_qr_code_folder = config.get('Folder', 'invite_qr_code')  
+https_key_folder = config.get('Folder', 'https_key')
 
+#######################################################################################
+# HTTPS
+
+https_key = config.get('HTTPS', 'https_key_file')
+https_crt = config.get('HTTPS', 'https_crt_file')
+https_file_pwd = config.get('HTTPS', 'https_file_pwd')
+
+https_server_key = current_folder+https_key_folder+https_key
+https_server_crt = current_folder+https_key_folder+https_crt
+ 
 #######################################################################################
 # Setup mongodb connection
 
@@ -63,10 +74,17 @@ port_mongodb = config.get('Mongodb', 'port')
 mongodb_host = os.environ.get('MONGO_HOST', ip_address_mongodb)
 mongodb_port = int(os.environ.get('MONGO_PORT', port_mongodb))
 client = MongoClient(mongodb_host, mongodb_port)    #Configure the connection to the database
-db = client.mqtt    #Select the database
-mqtt_user_collection = db.mqtt_user #Select the defined user collection
-mqtt_acl_collection = db.mqtt_acl   #Select access control list of user collection
+db = client.mqtt    #Select the database. Careful when change because it is up to EMQX Broker
+mqtt_user_collection = db.mqtt_user #Select the defined user collection. Careful when change because it is up to EMQX Broker
+mqtt_acl_collection = db.mqtt_acl   #Select access control list of user collection. Careful when change because it is up to EMQX Broker
 
+username_field = config.get('Mongodb', 'username_field') #Get field name in collection
+password_field = config.get('Mongodb', 'password_field') 
+email_field = config.get('Mongodb', 'email_field') 
+all_location_field = config.get('Mongodb', 'all_location_field') 
+keyid_field = config.get('Mongodb', 'keyid_field') 
+fieldname_field = config.get('Mongodb', 'fieldname_field') 
+inside_field = config.get('Mongodb', 'inside_field') 
 #######################################################################################
 # JWT
 
@@ -256,19 +274,6 @@ def resend_mqtt_cert():
             return jsonify({'result': 'Fail to send new MQTT Certificate'})
 
 def create_invited_qr_code(encoded, _email, _keyid, _fieldname, _date, _time): #Create qr code from jwt and return file path
-    '''qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-
-    #Create qr code
-    qr.add_data(encoded)
-    qr.make(fit=True)
-
-    img = qr.make_image(fill_color="black", back_color="white")'''
-
     img = qrcode.make(encoded)
     if path.exists(current_folder+invite_qr_code_folder+'/'+session['username']) is False: #Check folder for user exist
         os.chdir(current_folder+invite_qr_code_folder)
@@ -277,7 +282,6 @@ def create_invited_qr_code(encoded, _email, _keyid, _fieldname, _date, _time): #
     iml = img.save(qr_file_path)
 
     return qr_file_path
-
 
 def get_all_selected_parking_spots(): #Get all selected parking spots of current user
     username = session['username']
