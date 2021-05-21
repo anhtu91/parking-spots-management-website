@@ -68,16 +68,6 @@ mqtt_user_collection = db.mqtt_user #Select the defined user collection
 mqtt_acl_collection = db.mqtt_acl   #Select access control list of user collection
 
 #######################################################################################
-# QR Code 
-
-qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-
-#######################################################################################
 # JWT
 
 private_key = config.get('JWT', 'private_key') #Get JWT private key
@@ -184,17 +174,9 @@ def invite(): #Use to invite visitor
             #Create jwt from invite info using private key
             encoded = jwt.encode(invite_json, private_key, algorithm=jwt_algorithm)
 
-            #Create qr code
-            qr.add_data(encoded)
-            qr.make(fit=True)
+            #Create qr code from jwt
+            qr_file_path = create_invited_qr_code(encoded, _email, _keyid, _fieldname, _date, _time)
 
-            img = qr.make_image(fill_color="black", back_color="white")
-            if path.exists(current_folder+invite_qr_code_folder+'/'+session['username']) is False: #Check folder for user exist
-                os.chdir(current_folder+invite_qr_code_folder)
-                os.system('mkdir '+session['username']) #Create a folder for every user
-            qr_file_path = current_folder+invite_qr_code_folder+"/"+session['username']+"/"+_email+'_'+_keyid+'_'+_fieldname+'_'+_date+'_'+_time+".png"
-            iml = img.save(qr_file_path)
-            
             #Send email to visitor
             send_invite_email(session['username'], _email, _keyid, _fieldname, _time, _date, qr_file_path)
             return jsonify({'result': 'Send successful invitation to your visitor'})
@@ -272,6 +254,29 @@ def resend_mqtt_cert():
         except Exception as e:
             print('Error while resend mqtt certificate '+str(e))
             return jsonify({'result': 'Fail to send new MQTT Certificate'})
+
+def create_invited_qr_code(encoded, _email, _keyid, _fieldname, _date, _time): #Create qr code from jwt and return file path
+    '''qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+
+    #Create qr code
+    qr.add_data(encoded)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")'''
+
+    img = qrcode.make(encoded)
+    if path.exists(current_folder+invite_qr_code_folder+'/'+session['username']) is False: #Check folder for user exist
+        os.chdir(current_folder+invite_qr_code_folder)
+        os.system('mkdir '+session['username']) #Create a folder for every user
+    qr_file_path = current_folder+invite_qr_code_folder+"/"+session['username']+"/"+_email+'_'+_keyid+'_'+_fieldname+'_'+_date+'_'+_time+".png"
+    iml = img.save(qr_file_path)
+
+    return qr_file_path
 
 
 def get_all_selected_parking_spots(): #Get all selected parking spots of current user
