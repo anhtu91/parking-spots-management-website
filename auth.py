@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from hashlib import sha256 #Covert to SHA256
 from pymongo import MongoClient # Database connector
 import os
+from os import path
 import requests
 
 import smtplib #Email connection
@@ -151,7 +152,8 @@ def logout(): #define the logout function
 @auth.route('/fieldname', methods=['POST'])
 def get_fieldname_list(): #Get fieldname from selected keyid
     if 'username' in session:
-        selected_keyid = request.get_json(force=True)
+        json_data = request.json
+        selected_keyid = json_data['keyid']
         fieldname = get_field_name_from_keyid(selected_keyid)
         return jsonify(fieldname)
 
@@ -159,13 +161,14 @@ def get_fieldname_list(): #Get fieldname from selected keyid
 def invite(): #Use to invite visitor
     if 'username' in session:
         try:
-            _keyid = request.form.get('keyid_list')
-            _fieldname = request.form.get('fieldname_list')
-            _date = request.form['invited_day']
-            _time = request.form['invited_time']
-            _email = request.form.get('email')
+            json_data = request.json #Get json data from post request
+            _keyid = json_data['keyid']
+            _fieldname = json_data['fieldname']
+            _date = json_data['date']
+            _time = json_data['time']
+            _email = json_data['email']
 
-            invite_json = {
+            invite_json = { #Create json
                 "keyid": _keyid,
                 "fieldname": _fieldname,
                 "date": _date,
@@ -180,49 +183,90 @@ def invite(): #Use to invite visitor
             qr.make(fit=True)
 
             img = qr.make_image(fill_color="black", back_color="white")
-            qr_file_path = current_folder+invite_qr_code_folder+"/"+_email+'_'+_keyid+'_'+_fieldname+'_'+_date+'_'+_time+".png"
+            if path.exists(current_folder+invite_qr_code_folder+'/'+session['username']) is False: #Check folder for user exist
+                os.chdir(current_folder+invite_qr_code_folder)
+                os.system('mkdir '+session['username']) #Create a folder for every user
+            qr_file_path = current_folder+invite_qr_code_folder+"/"+session['username']+"/"+_email+'_'+_keyid+'_'+_fieldname+'_'+_date+'_'+_time+".png"
             iml = img.save(qr_file_path)
             
             #Send email to visitor
             send_invite_email(session['username'], _email, _keyid, _fieldname, _time, _date, qr_file_path)
-            flash('Send successful invitation to your visitor', 'success')
+            return jsonify({'result': 'Send successful invitation to your visitor'})
         except Exception as e:
-            flash('Error while sending email to visitor', 'danger')
             print('Error while sending email to visitor '+str(e))
-        return redirect(url_for('main.profile'))
+            return jsonify({'result': 'Error while sending email to visitor'})
+        
 
 @auth.route('/addspots', methods=['POST'])
 def add_spots(): #Add select spots to mongodb
     if 'username' in session:
+        json_data = request.json #Get json data from post request
+        _keyid = json_data['keyid']
+        _fieldname = json_data['fieldname']
+        _username = session['username']
         try:
-            json_data = request.json
-            _keyid = json_data['keyid']
-            _fieldname = json_data['fieldname']
-            _username = session['username']
-
-            user_data = mqtt_user_collection.find_one({"username":_username})
-            all_selected_parking_spots = user_data['allSelectedLocations']
+            user_data = mqtt_user_collection.find_one({"username":_username}) #Find user query in mongodb
+            all_selected_parking_spots = user_data['allSelectedLocations'] #Get selected parking spot of user
             
             if check_user_already_select_spot(_keyid, _fieldname, all_selected_parking_spots): #User select spot which already existed his selected parking spots
-                return redirect(url_for('main.profile'))
+                return jsonify({'result': 'You have already selected this parking spot'})
 
             new_selected_parking_spot = {"keyID": _keyid, "fieldName": _fieldname, "inside": False}
-            all_selected_parking_spots.append(new_selected_parking_spot)
+            all_selected_parking_spots.append(new_selected_parking_spot) #Add new selected parking spot
 
             selected_locations = {"$set": {"allSelectedLocations":all_selected_parking_spots}}
-            mqtt_user_collection.update_one({"username":_username}, selected_locations)
+            mqtt_user_collection.update_one({"username":_username}, selected_locations) #Update to mongodb
+
+            return jsonify({'result': 'success', 'selectParkingSpots' : get_all_selected_parking_spots()})
         except Exception as e:
             print('Error while adding spot '+str(e))
-        return jsonify(get_all_selected_parking_spots())
+            return jsonify({'result': 'Fail to add new parking spot '+_keyid+" - "+_fieldname})
 
 @auth.route('/removespots', methods=['POST'])
 def remove_spots(): #Remove select spots 
     if 'username' in session:
+        json_data = request.json #Get json data from post request
+        _keyid = json_data['keyid']
+        _fieldname = json_data['fieldname']
+        _username = session['username']
         try:
-            pass
+            user_data = mqtt_user_collection.find_one({"username":_username}) #Find user query in mongodb
+            all_selected_parking_spots = user_data['allSelectedLocations'] #Get selected parking spot of user
+
+            if check_user_already_select_spot(_keyid, _fieldname, all_selected_parking_spots): #User select spot which already existed his selected parking spots
+                for spot in all_selected_parking_spots:
+                    if spot['keyID'] == _keyid and spot['fieldName'] == _fieldname:
+                        all_selected_parking_spots.remove(spot) #Remove spot from selected list
+                        break
+
+                selected_locations = {"$set": {"allSelectedLocations":all_selected_parking_spots}}
+                mqtt_user_collection.update_one({"username":_username}, selected_locations) #Update to mongodb
+                return jsonify({'result': 'success', 'selectParkingSpots' : get_all_selected_parking_spots()})
+            else:
+                return jsonify({'result': 'You have not selected this parking spot'})
+
         except Exception as e:
-            print('Error while adding spot '+str(e))
-        return jsonify(get_all_selected_parking_spots())
+            print('Error while removing spot '+str(e))
+            return jsonify({'result': 'Fail to remove parking spot '+_keyid+" - "+_fieldname})
+
+@auth.route('/resendmqttcert', methods=['POST'])
+def resend_mqtt_cert():
+    if 'username' in session:
+        try:
+            json_data = request.json #Get json data from post request
+            _pwd = json_data['pwd'] #Get new password
+
+            create_mqtt_certificate(session['username'], _pwd) #Create new certificate with new password
+
+            user_data = mqtt_user_collection.find_one({"username":session['username']}) #Find user query in mongodb
+            email = user_data['email'] #Get email of user
+
+            resend_mqtt_cert(session['username'], email)
+            return jsonify({'result': 'Send new MQTT Certificate to your email successful'})
+        except Exception as e:
+            print('Error while resend mqtt certificate '+str(e))
+            return jsonify({'result': 'Fail to send new MQTT Certificate'})
+
 
 def get_all_selected_parking_spots(): #Get all selected parking spots of current user
     username = session['username']
@@ -274,6 +318,14 @@ def create_mqtt_certificate(_username, _mqttPassword): #Create MQTT Certificate 
     os.system('openssl req -new -key '+_username+'.key -out '+_username+'.csr -subj "'+require_info+'"')
     os.system('openssl x509 -req -days '+valid_day+' -in '+_username+'.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out '+_username+'.pem')
     os.system('openssl pkcs12 -export -in '+_username+'.pem -inkey '+_username+'.key -name "$'+_username+' certificate/key" -out '+_username+'.p12 -password pass:'+_mqttPassword)
+    
+    if path.exists(current_folder+mqtt_client_key_folder+'/'+_username) is False:
+        os.system('mkdir '+_username)
+
+    os.system('mv '+_username+'.csr '+_username) #Move file to user folder
+    os.system('mv '+_username+'.key '+_username)
+    os.system('mv '+_username+'.p12 '+_username)
+    os.system('mv '+_username+'.pem '+_username)
 
 def insert_new_user_to_database(_username, _password, _email): #Insert new user to mongodb
     mqtt_user_post = {
@@ -289,10 +341,16 @@ def insert_new_user_to_database(_username, _password, _email): #Insert new user 
 
     mqtt_user_collection.insert(mqtt_user_post)
 
+def resend_mqtt_cert(username, receiver_email):
+    subject = "Resend MQTT Certificate - Parking spots management system"
+    body = "Dear "+username+",\n\nYou have requested for new MQTT Certificate. The MQTT Certificate for securing MQTT Connection by Owntracks can be found in attachment.\n\nBest regrad,\nFH Dortmund - Parking spots management system"
+    files_path = [current_folder+mqtt_client_key_folder+'/ca.pem', current_folder+mqtt_client_key_folder+'/'+username+'/'+username+'.p12']
+    send_email_to_user(receiver_email, files_path, subject, body)
+
 def send_signup_email(username, receiver_email): #Send registration email to user
     subject = "Registration confirm - Parking spots management system"
     body = "Dear "+username+",\n\nYou have registered by Parking spots management system. MQTT Certificate for securing MQTT Connection by Owntracks can be found in attachment.\n\nBest regrad,\nFH Dortmund - Parking spots management system"
-    files_path = [current_folder+mqtt_client_key_folder+'/ca.pem', current_folder+mqtt_client_key_folder+'/'+username+'.p12']
+    files_path = [current_folder+mqtt_client_key_folder+'/ca.pem', current_folder+mqtt_client_key_folder+'/'+username+'/'+username+'.p12']
     send_email_to_user(receiver_email, files_path, subject, body)
 
 def send_invite_email(username, receiver_email, keyid, fieldname, time, date, qr_file_path): #Send invitation email to user

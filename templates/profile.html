@@ -8,7 +8,7 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 <script>
 $(function(){
-    var select_keyid_invite = $('#keyid_list_invite');
+    var select_keyid_invite = $('#invited_keyid_list');
     var select_keyid_parking_spots = $('#your_select_keyid');    
     var select_fieldname_parking_spots = $('#your_select_fieldname');
 
@@ -23,21 +23,42 @@ $(function(){
         $.ajax({
             type: 'POST',
             url: '/fieldname',
-            data: JSON.stringify(selected_keyid),
+            data: JSON.stringify({'keyid': selected_keyid}),
             contentType: 'application/json',
             success: function(response_data) {
-                $("#fieldname_list").empty();
+                $("#invited_fieldname_list").empty();
             
                 console.log(response_data)
                 for (var i = 0; i < response_data.length; i++) {
-                    $("#fieldname_list").append($('<option value="' +response_data[i]+ '">' + response_data[i] + '</option>'));
+                    $("#invited_fieldname_list").append($('<option value="' +response_data[i]+ '">' + response_data[i] + '</option>'));
                 }
+            },
+            error: function (request, status, error) {
+                alert("Error "+request.responseText);
             }
         });
     });
 
+    //When user click invite button
     $('#invite').click(function(e){
+        var keyid = select_keyid_invite.val();
+        var fieldname = $('#invited_fieldname_list').val();
+        var date = $('#invited_day').val();
+        var time = $('#invited_time').val();
+        var email = $('#invited_email').val();
 
+        $.ajax({
+            type: 'POST',
+            url: '/invite',
+            data: JSON.stringify({"keyid": keyid, "fieldname": fieldname, "date": date, "time": time, "email": email}),
+            contentType: 'application/json',
+            success: function(response_data) {
+                alert(response_data['result']);
+            },
+            error: function (request, status, error) {
+                alert("Error "+request.responseText);
+            }
+        });
     });
 
     //When user click keyid in your selected parking spots
@@ -47,7 +68,7 @@ $(function(){
         $.ajax({
             type: 'POST',
             url: '/fieldname',
-            data: JSON.stringify(selected_keyid),
+            data: JSON.stringify({'keyid': selected_keyid}),
             contentType: 'application/json',
             success: function(response_data) {
                 $("#your_select_fieldname").empty();
@@ -56,6 +77,9 @@ $(function(){
                 for (var i = 0; i < response_data.length; i++) {
                     $("#your_select_fieldname").append($('<option value="' +response_data[i]+ '">' + response_data[i] + '</option>'));
                 }
+            },
+            error: function (request, status, error) {
+                alert("Error "+request.responseText);
             }
         });
     });
@@ -71,19 +95,23 @@ $(function(){
             data: JSON.stringify({"keyid": selected_keyid, "fieldname": selected_fieldname}),
             contentType: 'application/json',
             success: function(response_data) {
-                alert("success")
-                console.log(response_data);
-                var table = document.getElementById("parking_spots_list");
-                table.innerHTML="";
-                var tr="";
+                if(response_data['result'] == 'success'){
+                    var table = document.getElementById("parking_spots_list");
+                    table.innerHTML="";
+                    var tr="";
 
-                response_data.forEach(element => {
-                    tr+='<tr>';
-                    tr+='<td>'+element.keyid+'</td>'+'<td>'+element.fieldname+'</td>'
-                    tr+='</tr>'
-                });
+                    response_data['selectParkingSpots'].forEach(element => {
+                        tr+='<tr>';
+                        tr+='<td>'+element.keyid+'</td>'+'<td>'+element.fieldname+'</td>'
+                        tr+='</tr>'
+                    });
 
-                table.innerHTML+=tr;
+                    table.innerHTML+=tr;
+                }
+                alert(response_data['result']);
+            },
+            error: function (request, status, error) {
+                alert("Error "+request.responseText);
             }
         });
     });
@@ -99,19 +127,42 @@ $(function(){
             data: JSON.stringify({"keyid": selected_keyid, "fieldname": selected_fieldname}),
             contentType: 'application/json',
             success: function(response_data) {
-                alert("success")
-                console.log(response_data);
-                var table = document.getElementById("parking_spots_list");
-                table.innerHTML="";
-                var tr="";
+                if(response_data['result'] == 'success'){
+                    console.log(response_data);
+                    var table = document.getElementById("parking_spots_list");
+                    table.innerHTML="";
+                    var tr="";
 
-                response_data.forEach(element => {
-                    tr+='<tr>';
-                    tr+='<td>'+element.keyid+'</td>'+'<td>'+element.fieldname+'</td>'
-                    tr+='</tr>'
-                });
+                    response_data['selectParkingSpots'].forEach(element => {
+                        tr+='<tr>';
+                        tr+='<td>'+element.keyid+'</td>'+'<td>'+element.fieldname+'</td>'
+                        tr+='</tr>'
+                    });
 
-                table.innerHTML+=tr;
+                    table.innerHTML+=tr;
+                }
+                alert(response_data['result']);
+            },
+            error: function (request, status, error) {
+                alert("Error "+request.responseText);
+            }
+        });
+    });
+
+    //When user click resend mqtt certificate
+    $('#resend').click(function(e){
+        var password = $('#mqttPassword').val();
+
+        $.ajax({
+            type: 'POST',
+            url: '/resendmqttcert',
+            data: JSON.stringify({"pwd": password}),
+            contentType: 'application/json',
+            success: function(response_data) {
+                alert(response_data['result']);
+            },
+            error: function (request, status, error) {
+                alert("Error "+request.responseText);
             }
         });
     });
@@ -243,7 +294,7 @@ $(function(){
 
         </div>
     </form>
-
+    
     <form style="width: 500px; height: 500px; float: right;">
         <div class="form" style="height: 428px;">
             <div class="control">
@@ -252,7 +303,7 @@ $(function(){
             
             <div class="control">
                 <label for="keyid">KeyID of parking spots:</label><br>
-                <select name ="keyid_list_invite" id="keyid_list_invite" style="width: 400px" required>
+                <select name ="invited_keyid_list" id="invited_keyid_list" style="width: 400px" required>
                     <option value="" selected disabled hidden>Choose here</option>
                     {% for keyid in keyids %}
                         <option value ="{{keyid}}">{{keyid}}</option>
@@ -262,7 +313,7 @@ $(function(){
             
             <div class="control">
                 <label for="fieldname">FieldName of parking spots:</label><br>
-                <select name ="fieldname_list" id="fieldname_list" style="width: 400px" required>
+                <select name ="invited_fieldname_list" id="invited_fieldname_list" style="width: 400px" required>
                     
                 </select><br><br>
             </div>
@@ -275,27 +326,27 @@ $(function(){
     
             <div class="control">
                 <label for="email">Invited email:</label><br>
-                <input type="email" id="email" name="email" style="width: 400px" required><br><br>
+                <input type="email" id="invited_email" name="invited_email" style="width: 400px" required><br><br>
             </div>
             
             <div class="control">
-                <input type="submit" name="invite" style="width: 100px" value="Invite">
+                <input type="button" id="invite" style="width: 100px" value="Invite"/>
             </div>
         </div>
     </form>
 
-    <form style="width: 500px; height: 228px; float: right;" action="/resendmqttcert" method="POST">
+    <form style="width: 500px; height: 228px; float: right;">
         <div class="form" style="height: 200px;">
             <div class="control">
                 <label for="form_label"><p style="font-size:130%;"><b>Resend MQTT Certificate to your email.</b></p></label><br>
                 <div class="field">
                     <div class="control">
                         New Certificate Password:
-                        <input class="input" type="password" name="mqttPassword" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}" title="Must contain at least one number and one uppercase and lowercase letter, and at least 8 or more characters" required>
+                        <input class="input" type="password" id="mqttPassword" name="mqttPassword" required>
                     </div>
                 </div>
                 <div class="control">
-                    <input type="submit" name="resend" style="width: 100px" value="Resend">
+                    <input type="button" id="resend" style="width: 100px" value="Resend">
                 </div>
             </div>
         </div>
