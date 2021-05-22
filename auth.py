@@ -362,7 +362,7 @@ def insert_new_user_to_access_control_list_collection(_username):
         username_field:_username,
         clientid_field:_username,
         publish_field: ["#"], #User can publish all topic
-        subscribe_field: ["/owntracks/%c/#"] #User can only his topic subscriber
+        subscribe_field: ["owntracks/"+_username+"/#"] #User can only his topic subscriber https://docs.emqx.io/en/broker/v4.3/advanced/acl-mongodb.html#default-data-structure
     }
 
     mqtt_acl_collection.insert(mqtt_acl_post)
