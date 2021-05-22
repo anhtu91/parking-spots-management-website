@@ -166,7 +166,7 @@ def signup(): # define the sign up function
                 flash('An email with MQTT certificate is sent to your email '+_email, 'success')
                 return redirect(url_for('auth.signup'))
     except Exception as e:
-        return render_template('index.html', error_message="Connection error. Please contact admin for more information!")
+        return render_template('index.html', error_message="Connection error. Please contact admin "+sender_email+" for more information!")
 
 @auth.route('/logout') # define logout path
 def logout(): #define the logout function
