@@ -78,24 +78,29 @@ db = client.mqtt    #Select the database. Careful when change because it is up t
 mqtt_user_collection = db.mqtt_user #Select the defined user collection. Careful when change because it is up to EMQX Broker
 mqtt_acl_collection = db.mqtt_acl   #Select access control list of user collection. Careful when change because it is up to EMQX Broker
 
-username_field = config.get('Mongodb', 'username_field') #Get field name in collection
-password_field = config.get('Mongodb', 'password_field') 
+username_field = config.get('Mongodb', 'username_field') #Get field name in collection. Careful when change because it is up to EMQX Broker
+password_field = config.get('Mongodb', 'password_field') #Careful when change because it is up to EMQX Broker
+is_superuser_field = config.get('Mongodb', 'is_superuser_field') #Careful when change because it is up to EMQX Broker
 email_field = config.get('Mongodb', 'email_field') 
 all_location_field = config.get('Mongodb', 'all_location_field') 
 keyid_field = config.get('Mongodb', 'keyid_field') 
 fieldname_field = config.get('Mongodb', 'fieldname_field') 
 inside_field = config.get('Mongodb', 'inside_field') 
+
+clientid_field = config.get('Mongodb', 'clientid_field')    #Careful when change because it is up to EMQX Broker
+publish_field = config.get('Mongodb', 'publish_field')      #Careful when change because it is up to EMQX Broker
+subscribe_field = config.get('Mongodb', 'subscribe_field')  #Careful when change because it is up to EMQX Broker
 #######################################################################################
 # JWT
 
 private_key = config.get('JWT', 'private_key') #Get JWT private key
-jwt_algorithm = config.get('JWT', 'algorithm')
+jwt_algorithm = config.get('JWT', 'algorithm') #Select algorithm for JWT
 
 #######################################################################################
 # MQTT certificate
 
-require_info = config.get('MQTT_certificate', 'require_info')
-valid_day = config.get('MQTT_certificate', 'valid_day')
+require_info = config.get('MQTT_certificate', 'require_info') #Require info for MQTT Certificate
+valid_day = config.get('MQTT_certificate', 'valid_day')         
 size_of_key_to_generate_in_bits = config.get('MQTT_certificate', 'size_of_key_to_generate_in_bits')
 
 #######################################################################################
@@ -110,14 +115,14 @@ def login(): # define login page fucntion
         else: # if the request is POST the we check if the user exist and with te right password
             _username = request.form.get('username')
             _password = request.form.get('password')
-            user_query = mqtt_user_collection.find_one({"username":_username})
+            user_query = mqtt_user_collection.find_one({username_field:_username})
                     
             # check if the user actually exists
             # take the user-supplied password, hash it, and compare it to the hashed password in the database
             if not user_query:
                 flash('Please sign up before!', 'danger')
                 return redirect(url_for('auth.signup'))
-            elif sha256(_password.encode('utf-8')).hexdigest() != user_query["password"]:
+            elif sha256(_password.encode('utf-8')).hexdigest() != user_query[password_field]:
                 flash('Please check your login details and try again.', 'danger')
                 return redirect(url_for('auth.login')) # if the user doesn't exist or password is wrong, reload the page
             # if the above check passes, then we know the user has the right credentials
@@ -134,27 +139,32 @@ def signup(): # define the sign up function
         else: # if the request is POST, then we check if the email doesn't already exist and then we save data
             _username = request.form.get('username')
             _password = request.form.get('password')
-            _email = request.form.get('email')
-            _mqttPassword = request.form.get('mqttPassword')
-
-            user_query = mqtt_user_collection.find_one({"username":_username}) # if this returns a user, then the username already exists in database
-            email_query = mqtt_user_collection.find_one({"email":_email})
-
-            if user_query: # if a user is found, we want to redirect back to signup page so user can try again
-                flash('Username already exists', 'danger')
+            _confirm_password = request.form.get('confirmPassword')
+            if _password != _confirm_password:
+                flash('Password and confirm password are not same', 'warning')
                 return redirect(url_for('auth.signup'))
-            if email_query: # if email is found, we want to redirect back to signup page so user can try again
-                flash('Email address already exists', 'danger')
+            else:
+                _email = request.form.get('email')
+                _mqttPassword = request.form.get('mqttPassword')
+
+                user_query = mqtt_user_collection.find_one({username_field:_username}) # if this returns a user, then the username already exists in database
+                email_query = mqtt_user_collection.find_one({email_field:_email})
+
+                if user_query: # if a user is found, we want to redirect back to signup page so user can try again
+                    flash('Username already exists', 'danger')
+                    return redirect(url_for('auth.signup'))
+                if email_query: # if email is found, we want to redirect back to signup page so user can try again
+                    flash('Email address already exists', 'danger')
+                    return redirect(url_for('auth.signup'))
+
+                insert_new_user_to_database(_username, _password, _email) #Add new user info to database
+
+                create_mqtt_certificate(_username, _mqttPassword) #Create MQTT Certificate and encryption by password
+
+                send_signup_email(_username, _email) #Send confirmation email with MQTT Certificate to user
+
+                flash('An email with MQTT certificate is sent to your email '+_email, 'success')
                 return redirect(url_for('auth.signup'))
-
-            insert_new_user_to_database(_username, _password, _email) #Add new user info to database
-
-            create_mqtt_certificate(_username, _mqttPassword) #Create MQTT Certificate and encryption by password
-
-            send_signup_email(_username, _email) #Send confirmation email with MQTT Certificate to user
-
-            flash('An email with MQTT certificate is sent to your email '+_email, 'success')
-            return redirect(url_for('auth.signup'))
     except Exception as e:
         return render_template('index.html', error_message="Connection error. Please contact admin for more information!")
 
@@ -182,13 +192,9 @@ def invite(): #Use to invite visitor
             _time = json_data['time']
             _email = json_data['email']
 
-            invite_json = { #Create json
-                "keyid": _keyid,
-                "fieldname": _fieldname,
-                "date": _date,
-                "time": _time,
-                "email": _email
-            }
+            #Create json
+            invite_json = { "keyid": _keyid, "fieldname": _fieldname, "date": _date, "time": _time, "email": _email}
+
             #Create jwt from invite info using private key
             encoded = jwt.encode(invite_json, private_key, algorithm=jwt_algorithm)
 
@@ -202,7 +208,6 @@ def invite(): #Use to invite visitor
             print('Error while sending email to visitor '+str(e))
             return jsonify({'result': 'Error while sending email to visitor'})
         
-
 @auth.route('/addspots', methods=['POST'])
 def add_spots(): #Add select spots to mongodb
     if 'username' in session:
@@ -211,17 +216,17 @@ def add_spots(): #Add select spots to mongodb
         _fieldname = json_data['fieldname']
         _username = session['username']
         try:
-            user_data = mqtt_user_collection.find_one({"username":_username}) #Find user query in mongodb
-            all_selected_parking_spots = user_data['allSelectedLocations'] #Get selected parking spot of user
+            user_data = mqtt_user_collection.find_one({username_field:_username}) #Find user query in mongodb
+            all_selected_parking_spots = user_data[all_location_field] #Get selected parking spot of user
             
             if check_user_already_select_spot(_keyid, _fieldname, all_selected_parking_spots): #User select spot which already existed his selected parking spots
                 return jsonify({'result': 'You have already selected this parking spot'})
 
-            new_selected_parking_spot = {"keyID": _keyid, "fieldName": _fieldname, "inside": False}
+            new_selected_parking_spot = {keyid_field: _keyid, fieldname_field: _fieldname, inside_field: False}
             all_selected_parking_spots.append(new_selected_parking_spot) #Add new selected parking spot
 
-            selected_locations = {"$set": {"allSelectedLocations":all_selected_parking_spots}}
-            mqtt_user_collection.update_one({"username":_username}, selected_locations) #Update to mongodb
+            selected_locations = {"$set": {all_location_field:all_selected_parking_spots}}
+            mqtt_user_collection.update_one({username_field:_username}, selected_locations) #Update to mongodb
 
             return jsonify({'result': 'success', 'selectParkingSpots' : get_all_selected_parking_spots()})
         except Exception as e:
@@ -236,21 +241,20 @@ def remove_spots(): #Remove select spots
         _fieldname = json_data['fieldname']
         _username = session['username']
         try:
-            user_data = mqtt_user_collection.find_one({"username":_username}) #Find user query in mongodb
-            all_selected_parking_spots = user_data['allSelectedLocations'] #Get selected parking spot of user
+            user_data = mqtt_user_collection.find_one({username_field:_username}) #Find user query in mongodb
+            all_selected_parking_spots = user_data[all_location_field] #Get selected parking spot of user
 
             if check_user_already_select_spot(_keyid, _fieldname, all_selected_parking_spots): #User select spot which already existed his selected parking spots
                 for spot in all_selected_parking_spots:
-                    if spot['keyID'] == _keyid and spot['fieldName'] == _fieldname:
+                    if spot[keyid_field] == _keyid and spot[fieldname_field] == _fieldname:
                         all_selected_parking_spots.remove(spot) #Remove spot from selected list
                         break
 
-                selected_locations = {"$set": {"allSelectedLocations":all_selected_parking_spots}}
-                mqtt_user_collection.update_one({"username":_username}, selected_locations) #Update to mongodb
+                selected_locations = {"$set": {all_location_field:all_selected_parking_spots}}
+                mqtt_user_collection.update_one({username_field:_username}, selected_locations) #Update to mongodb
                 return jsonify({'result': 'success', 'selectParkingSpots' : get_all_selected_parking_spots()})
             else:
                 return jsonify({'result': 'You have not selected this parking spot'})
-
         except Exception as e:
             print('Error while removing spot '+str(e))
             return jsonify({'result': 'Fail to remove parking spot '+_keyid+" - "+_fieldname})
@@ -264,8 +268,8 @@ def resend_mqtt_cert():
 
             create_mqtt_certificate(session['username'], _pwd) #Create new certificate with new password
 
-            user_data = mqtt_user_collection.find_one({"username":session['username']}) #Find user query in mongodb
-            email = user_data['email'] #Get email of user
+            user_data = mqtt_user_collection.find_one({username_field:session['username']}) #Find user query in mongodb
+            email = user_data[email_field] #Get email of user
 
             resend_mqtt_cert(session['username'], email)
             return jsonify({'result': 'Send new MQTT Certificate to your email successful'})
@@ -285,18 +289,18 @@ def create_invited_qr_code(encoded, _email, _keyid, _fieldname, _date, _time): #
 
 def get_all_selected_parking_spots(): #Get all selected parking spots of current user
     username = session['username']
-    user_data = mqtt_user_collection.find_one({"username":username})
-    all_selected_parking_spots = user_data['allSelectedLocations']
+    user_data = mqtt_user_collection.find_one({username_field:username})
+    all_selected_parking_spots = user_data[all_location_field]
     parking_spots =[]
 
     for spot in all_selected_parking_spots:
-        parking_spots.append({"keyid": spot['keyID'],"fieldname": spot['fieldName']})
+        parking_spots.append({"keyid": spot[keyid_field],"fieldname": spot[fieldname_field]})
 
     return parking_spots
 
 def check_user_already_select_spot(_keyid, _fieldname, all_selected_parking_spots): #Check if user already selected parking spot. Return true if already selected and save in mongodb
     for spot in all_selected_parking_spots:
-        if spot['keyID'] == _keyid and spot['fieldName'] == _fieldname:
+        if spot[keyid_field] == _keyid and spot[fieldname_field] == _fieldname:
             return True
     return False
 
@@ -313,17 +317,17 @@ def get_data_from_geofence_server(http_link): #Use to ask tile38
     return return_data
 
 def get_key_id_from_geofence_server(): #Get all keyid from tile38
-    return_data = get_data_from_geofence_server(get_all_keys_tile38_link)
-    keyIDs = return_data['keys']
+    return_data = get_data_from_geofence_server(get_all_keys_tile38_link) #Return a json data
+    keyIDs = return_data['keys'] #Get keyids from json data
     return keyIDs
 
 def get_field_name_from_keyid(keyid): #Get fieldname from keyid 
-    return_data = get_data_from_geofence_server(get_field_name_base_link+keyid)
+    return_data = get_data_from_geofence_server(get_field_name_base_link+keyid) #Return a json data
     fieldname = [] #get all field name which belongs to keyid
     objects = return_data['objects']
 
     for object in objects:
-        fieldname.append(object['id'])
+        fieldname.append(object['id']) #Get fieldnames from json
 
     return fieldname
 
@@ -342,20 +346,31 @@ def create_mqtt_certificate(_username, _mqttPassword): #Create MQTT Certificate 
     os.system('mv '+_username+'.p12 '+_username)
     os.system('mv '+_username+'.pem '+_username)
 
-def insert_new_user_to_database(_username, _password, _email): #Insert new user to mongodb
-    mqtt_user_post = {
-        "username":_username,
-        "password": sha256(_password.encode('utf-8')).hexdigest(),
-        "email": _email,
-        "allSelectedLocations": []
-    }
-        
-    mqtt_acl_post = {
-
+def insert_new_user_to_mqtt_user_collection(_username, _password, _email):
+    mqtt_user_post = { #Add user to mqtt_user collection
+        username_field:_username,
+        password_field: sha256(_password.encode('utf-8')).hexdigest(), #Convert password to sha256
+        is_superuser_field: False,
+        email_field: _email,
+        all_location_field: []
     }
 
     mqtt_user_collection.insert(mqtt_user_post)
 
+def insert_new_user_to_access_control_list_collection(_username):
+    mqtt_acl_post = { #Add user to access control list collection
+        username_field:_username,
+        clientid_field:_username,
+        publish_field: ["#"], #User can publish all topic
+        subscribe_field: ["/owntracks/%c/#"] #User can only his topic subscriber
+    }
+
+    mqtt_acl_collection.insert(mqtt_acl_post)
+
+def insert_new_user_to_database(_username, _password, _email): #Insert new user to mongodb
+    insert_new_user_to_mqtt_user_collection(_username, _password, _email)
+    insert_new_user_to_access_control_list_collection(_username)    
+    
 def resend_mqtt_cert(username, receiver_email): #Resend mqtt cert
     subject = "Resend MQTT Certificate - Parking spots management system"
     body = "Dear "+username+",\n\nYou have requested for new MQTT Certificate. The MQTT Certificate for securing MQTT Connection by Owntracks can be found in attachment.\n\nBest regrad,\nFH Dortmund - Parking spots management system"
@@ -374,6 +389,17 @@ def send_invite_email(username, receiver_email, keyid, fieldname, time, date, qr
     files_path = [qr_file_path]
     send_email_to_user(receiver_email, files_path, subject, body)
 
+def add_file_to_attachment(message, files_path): #Add file to attachment
+    for file_path in files_path: 
+        with open(file_path, "rb") as attachment:
+            part = MIMEBase('application', "octet-stream")
+            part.set_payload((attachment).read())
+            # Encoding payload is necessary if encoded (compressed) file has to be attached.
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', "attachment; filename= %s" % os.path.basename(file_path))
+            message.attach(part)
+    return message
+
 def send_email_to_user(receiver_email, files_path, subject, body):
     # Create a multipart message and set headers
     message = MIMEMultipart()
@@ -385,14 +411,8 @@ def send_email_to_user(receiver_email, files_path, subject, body):
     # Add body to email
     message.attach(MIMEText(body, "plain"))
 
-    for file_path in files_path:
-        with open(file_path, "rb") as attachment:
-            part = MIMEBase('application', "octet-stream")
-            part.set_payload((attachment).read())
-            # Encoding payload is necessary if encoded (compressed) file has to be attached.
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', "attachment; filename= %s" % os.path.basename(file_path))
-            message.attach(part)
+    #Add file to attachment
+    message = add_file_to_attachment(message, files_path)
 
     # Start SMTP server at port 587
     server = smtplib.SMTP(smtp_server, 587)

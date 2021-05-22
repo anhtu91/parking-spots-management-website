@@ -1,6 +1,7 @@
 ########################################################################################
 ######################          Import packages      ###################################
 ########################################################################################
+from datetime import timedelta
 from flask import Blueprint, render_template, session, request
 from flask import Flask
 import os
@@ -10,11 +11,6 @@ from werkzeug.utils import redirect
 from auth import get_key_id_from_geofence_server, get_all_selected_parking_spots, config, https_server_key, https_server_crt, https_file_pwd
 import ssl
 
-########################################################################################
-# HTTPS Configuration
-
-context = ssl.SSLContext()
-context.load_cert_chain(https_server_crt, https_server_key, password=https_file_pwd)
 
 ########################################################################################
 # our main blueprint
@@ -38,6 +34,9 @@ def profile():
         
 @main.before_request
 def before_request(): #If user enters http instead of https, this function will redirect to https. This function only works if port is 80
+    session.permanent = True
+    app.permanent_session_lifetime = timedelta(minutes=15) #Evey 15 minuten user must relogin
+
     if request.url.startswith('http://'):
         url = request.url.replace('http://', 'https://', 1)
         code = 301
@@ -56,4 +55,6 @@ if __name__ == '__main__':
     env = os.environ.get('APP_ENV', 'development')
     webport = int(os.environ.get('PORT', 5000)) #Change port to 80 if want to redirect http to https
     debug = False if env == 'production' else True
+    context = ssl.SSLContext() # HTTPS Configuration
+    context.load_cert_chain(https_server_crt, https_server_key, password=https_file_pwd)
     app.run(host='0.0.0.0', port=webport, debug=debug, ssl_context=context)
