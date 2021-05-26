@@ -8,7 +8,7 @@ import os
 
 from werkzeug.utils import redirect
 
-from auth import get_key_id_from_geofence_server, get_all_selected_parking_spots, config, https_server_key, https_server_crt, https_file_pwd
+from auth import get_key_id_from_geofence_server, get_all_selected_parking_spots, config, https_server_key, https_server_crt, https_file_pwd, logout_time
 import ssl
 
 
@@ -35,7 +35,7 @@ def profile():
 @main.before_request
 def before_request(): #If user enters http instead of https, this function will redirect to https. This function only works if port is 80
     session.permanent = True
-    app.permanent_session_lifetime = timedelta(minutes=15) #Evey 15 minuten user must relogin
+    app.permanent_session_lifetime = timedelta(minutes=int(logout_time)) #Evey 15 minuten user must relogin
 
     if request.url.startswith('http://'):
         url = request.url.replace('http://', 'https://', 1)

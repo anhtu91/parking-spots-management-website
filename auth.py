@@ -33,6 +33,11 @@ config = configparser.ConfigParser()
 config.read(current_folder+'/config.conf')
 
 #######################################################################################
+# Logout time
+
+logout_time = config.get('Logout', 'logout_time')
+
+#######################################################################################
 # Geofence Tile38 Server configuration
 
 ip_address_tile38 = config.get('Tile38', 'ip')
@@ -90,6 +95,7 @@ inside_field = config.get('Mongodb', 'inside_field')
 clientid_field = config.get('Mongodb', 'clientid_field')    #Careful when change because it is up to EMQX Broker
 publish_field = config.get('Mongodb', 'publish_field')      #Careful when change because it is up to EMQX Broker
 subscribe_field = config.get('Mongodb', 'subscribe_field')  #Careful when change because it is up to EMQX Broker
+
 #######################################################################################
 # JWT
 
@@ -168,7 +174,7 @@ def signup(): # define the sign up function
     except Exception as e:
         return render_template('index.html', error_message="Connection error. Please contact admin "+sender_email+" for more information!")
 
-@auth.route('/logout') # define logout path
+@auth.route('/logout') #define logout path
 def logout(): #define the logout function
     session.clear() #session.pop('username')
     return redirect(url_for('main.index'))
@@ -362,7 +368,7 @@ def insert_new_user_to_access_control_list_collection(_username):
         username_field:_username,
         clientid_field:_username,
         publish_field: ["#"], #User can publish all topic
-        subscribe_field: ["owntracks/"+_username+"/#"] #User can only his topic subscriber https://docs.emqx.io/en/broker/v4.3/advanced/acl-mongodb.html#default-data-structure
+        subscribe_field: ["owntracks/"+_username+"/parkplatz"] #User can only his topic subscriber https://docs.emqx.io/en/broker/v4.3/advanced/acl-mongodb.html#default-data-structure
     }
 
     mqtt_acl_collection.insert(mqtt_acl_post)
