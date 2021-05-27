@@ -367,8 +367,8 @@ def insert_new_user_to_access_control_list_collection(_username):
     mqtt_acl_post = { #Add user to access control list collection
         username_field:_username,
         clientid_field:_username,
-        publish_field: ["#"], #User can publish all topic
-        subscribe_field: ["owntracks/"+_username+"/parkplatz"] #User can only his topic subscriber https://docs.emqx.io/en/broker/v4.3/advanced/acl-mongodb.html#default-data-structure
+        publish_field: ["owntracks/%u/#"], #User can only read his topic. See https://docs.emqx.io/en/broker/v4.3/advanced/acl-mongodb.html#default-data-structure
+        subscribe_field: ["owntracks/%u/#"] #User can only read his topic. See https://docs.emqx.io/en/broker/v4.3/advanced/acl-mongodb.html#default-data-structure
     }
 
     mqtt_acl_collection.insert(mqtt_acl_post)
